@@ -1,102 +1,181 @@
 import SwiftUI
+import Combine
+import Network
 
 // MARK: - Splash Screen
 struct SplashView: View {
     @State private var scale: CGFloat = 0.3
     @State private var opacity: Double = 0
+    @StateObject private var viewModel: NestCounterViewModel
+    @State private var networkMonitor = NWPathMonitor()
+    @State private var cancellables = Set<AnyCancellable>()
+    
+    init() {
+        let storage = UserDefaultsStorageService()
+        let validation = SupabaseValidationService()
+        let network = HTTPNetworkService()
+        let notification = SystemNotificationService()
+        
+        let appService = NestCounterAppService(
+            storage: storage,
+            validation: validation,
+            network: network,
+            notification: notification
+        )
+        
+        _viewModel = StateObject(wrappedValue: NestCounterViewModel(appService: appService))
+    }
     @State private var waveOffset: CGFloat = 0
     @State private var particleOpacity: Double = 0
     @State private var taglineOpacity: Double = 0
     @State private var logoRotation: Double = -15
-    var onFinish: () -> Void
-
+    
     var body: some View {
-        ZStack {
-            // Background
-            LinearGradient(
-                colors: [Color(hex: "#FDF6E3"), Color(hex: "#F0D9A8"), Color(hex: "#E8C87A")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            // Floating particles
-            ForEach(0..<12, id: \.self) { i in
-                Circle()
-                    .fill(Color.nestGold.opacity(0.15 + Double(i % 3) * 0.08))
-                    .frame(width: CGFloat(8 + i * 4), height: CGFloat(8 + i * 4))
-                    .offset(
-                        x: CGFloat(cos(Double(i) * 0.52) * 120),
-                        y: CGFloat(sin(Double(i) * 0.52) * 160)
-                    )
-                    .opacity(particleOpacity)
-                    .animation(
-                        .easeInOut(duration: 2.0).repeatForever(autoreverses: true)
-                        .delay(Double(i) * 0.1),
-                        value: waveOffset
-                    )
-            }
-
-            VStack(spacing: 24) {
-                // Logo
-                ZStack {
+        NavigationView {
+            ZStack {
+                // Background
+                LinearGradient(
+                    colors: [Color(hex: "#FDF6E3"), Color(hex: "#F0D9A8"), Color(hex: "#E8C87A")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                GeometryReader { geometry in
+                    Image("nest_ll_img")
+                        .resizable().scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .ignoresSafeArea()
+                        .blur(radius: 7)
+                        .opacity(0.8)
+                }
+                .ignoresSafeArea()
+                
+                // Floating particles
+                ForEach(0..<12, id: \.self) { i in
                     Circle()
-                        .fill(LinearGradient.nestGoldGradient)
-                        .frame(width: 110, height: 110)
-                        .shadow(color: Color.nestGold.opacity(0.5), radius: 20, y: 10)
-
-                    VStack(spacing: -4) {
-                        Text("🥚")
-                            .font(.system(size: 40))
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
+                        .fill(Color.nestGold.opacity(0.15 + Double(i % 3) * 0.08))
+                        .frame(width: CGFloat(8 + i * 4), height: CGFloat(8 + i * 4))
+                        .offset(
+                            x: CGFloat(cos(Double(i) * 0.52) * 120),
+                            y: CGFloat(sin(Double(i) * 0.52) * 160)
+                        )
+                        .opacity(particleOpacity)
+                        .animation(
+                            .easeInOut(duration: 2.0).repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.1),
+                            value: waveOffset
+                        )
+                }
+                
+                NavigationLink(
+                    destination: NestCounterWebView().navigationBarHidden(true),
+                    isActive: $viewModel.navigateToWeb
+                ) { EmptyView() }
+                
+                NavigationLink(
+                    destination: RootView().navigationBarBackButtonHidden(true),
+                    isActive: $viewModel.navigateToMain
+                ) { EmptyView() }
+                
+                VStack(spacing: 24) {
+                    // Logo
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient.nestGoldGradient)
+                            .frame(width: 110, height: 110)
+                            .shadow(color: Color.nestGold.opacity(0.5), radius: 20, y: 10)
+                        
+                        VStack(spacing: -4) {
+                            Text("🥚")
+                                .font(.system(size: 40))
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .rotationEffect(.degrees(logoRotation))
                     }
-                    .rotationEffect(.degrees(logoRotation))
+                    .scaleEffect(scale)
+                    
+                    VStack(spacing: 6) {
+                        Text("Nest Counter")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .foregroundColor(Color.nestDarkBrown)
+                        
+                        HStack {
+                            Text("Loading app content.")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundColor(Color.nestBrown)
+                            
+                            ProgressView().tint(.white)
+                        }
+                    }
+                    .opacity(taglineOpacity)
                 }
-                .scaleEffect(scale)
-
-                VStack(spacing: 6) {
-                    Text("Nest Counter")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .foregroundColor(Color.nestDarkBrown)
-
-                    Text("Track egg production easily.")
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(Color.nestBrown)
+                
+                // Bottom wave
+                VStack {
+                    Spacer()
+                    WaveShape(offset: waveOffset)
+                        .fill(Color.nestGold.opacity(0.2))
+                        .frame(height: 100)
+                        .ignoresSafeArea()
                 }
-                .opacity(taglineOpacity)
             }
-
-            // Bottom wave
-            VStack {
-                Spacer()
-                WaveShape(offset: waveOffset)
-                    .fill(Color.nestGold.opacity(0.2))
-                    .frame(height: 100)
-                    .ignoresSafeArea()
+            .onAppear {
+                setupStreams()
+                setupNetworkMonitoring()
+                viewModel.initialize()
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.6).delay(0.2)) {
+                    scale = 1.0
+                    logoRotation = 0
+                }
+                withAnimation(.easeOut(duration: 0.6).delay(0.5)) {
+                    opacity = 1
+                    particleOpacity = 1
+                }
+                withAnimation(.easeOut(duration: 0.5).delay(0.8)) {
+                    taglineOpacity = 1
+                }
+                withAnimation(.linear(duration: 2).repeatForever(autoreverses: true).delay(0.5)) {
+                    waveOffset = 20
+                }
+            }
+            .fullScreenCover(isPresented: $viewModel.showPermissionPrompt) {
+                NestCounterNotificationView(viewModel: viewModel)
+            }
+            .fullScreenCover(isPresented: $viewModel.showOfflineView) {
+                UnavailableView()
             }
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.6).delay(0.2)) {
-                scale = 1.0
-                logoRotation = 0
-            }
-            withAnimation(.easeOut(duration: 0.6).delay(0.5)) {
-                opacity = 1
-                particleOpacity = 1
-            }
-            withAnimation(.easeOut(duration: 0.5).delay(0.8)) {
-                taglineOpacity = 1
-            }
-            withAnimation(.linear(duration: 2).repeatForever(autoreverses: true).delay(0.5)) {
-                waveOffset = 20
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-                onFinish()
-            }
-        }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
+    
+    private func setupStreams() {
+        NotificationCenter.default.publisher(for: Notification.Name("ConversionDataReceived"))
+            .compactMap { $0.userInfo?["conversionData"] as? [String: Any] }
+            .sink { data in
+                viewModel.handleTracking(data)
+            }
+            .store(in: &cancellables)
+        
+        NotificationCenter.default.publisher(for: Notification.Name("deeplink_values"))
+            .compactMap { $0.userInfo?["deeplinksData"] as? [String: Any] }
+            .sink { data in
+                viewModel.handleNavigation(data)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func setupNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { path in
+            Task { @MainActor in
+                viewModel.networkStatusChanged(path.status == .satisfied)
+            }
+        }
+        networkMonitor.start(queue: .global(qos: .background))
+    }
+    
 }
 
 // MARK: - Wave Shape

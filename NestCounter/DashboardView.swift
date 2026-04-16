@@ -29,6 +29,27 @@ struct MainTabView: View {
     }
 }
 
+struct UnavailableView: View {
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                Image("nest_ii_img")
+                    .resizable().scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .ignoresSafeArea()
+                    .blur(radius: 4)
+                    .opacity(0.7)
+                
+                Image("nest_aa_img")
+                    .resizable()
+                    .frame(width: 250, height: 220)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
 // MARK: - Custom Tab Bar
 struct NestTabBar: View {
     @Binding var selectedTab: Int

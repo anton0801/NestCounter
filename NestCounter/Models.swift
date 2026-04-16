@@ -1,6 +1,11 @@
 import Foundation
 import SwiftUI
 
+struct NestCounterConfig {
+    static let appID = "6762210545"
+    static let devKey = "MFAes2uiJTKFtreEaBErF8"
+}
+
 // MARK: - User Model
 struct NestUser: Codable, Identifiable {
     var id: String
@@ -105,6 +110,21 @@ struct FeedRecord: Codable, Identifiable {
     }
 }
 
+struct StoredData {
+    var tracking: [String: String]
+    var navigation: [String: String]
+    var endpoint: String?
+    var mode: String?
+    var isFirstLaunch: Bool
+    var permission: PermissionState
+    
+    struct PermissionState {
+        var isGranted: Bool
+        var isDenied: Bool
+        var lastAsked: Date?
+    }
+}
+
 // MARK: - Health Record Model
 struct HealthRecord: Codable, Identifiable {
     var id: String
@@ -181,7 +201,57 @@ struct FarmTask: Codable, Identifiable {
     }
 }
 
-// MARK: - Photo Count Result
+struct AppData {
+    var tracking: [String: String]
+    var navigation: [String: String]
+    var endpoint: String?
+    var mode: String?
+    var isFirstLaunch: Bool
+    var permission: PermissionData
+    var metadata: [String: String]
+    var isLocked: Bool
+    
+    struct PermissionData {
+        var isGranted: Bool
+        var isDenied: Bool
+        var lastAsked: Date?
+        
+        var canAsk: Bool {
+            guard !isGranted && !isDenied else { return false }
+            if let date = lastAsked {
+                return Date().timeIntervalSince(date) / 86400 >= 3
+            }
+            return true
+        }
+        
+        static var initial: PermissionData {
+            PermissionData(isGranted: false, isDenied: false, lastAsked: nil)
+        }
+    }
+    
+    func isOrganic() -> Bool {
+        tracking["af_status"] == "Organic"
+    }
+    
+    func hasTracking() -> Bool {
+        !tracking.isEmpty
+    }
+    
+    static var initial: AppData {
+        AppData(
+            tracking: [:],
+            navigation: [:],
+            endpoint: nil,
+            mode: nil,
+            isFirstLaunch: true,
+            permission: .initial,
+            metadata: [:],
+            isLocked: false
+        )
+    }
+}
+
+
 struct PhotoCountResult: Identifiable {
     var id = UUID()
     var detectedCount: Int
@@ -189,6 +259,13 @@ struct PhotoCountResult: Identifiable {
     var imageData: Data?
     var date: Date = Date()
 }
+
+enum NetworkError: Error {
+    case invalidURL
+    case requestFailed
+    case decodingFailed
+}
+
 
 // MARK: - Alert Model
 struct FarmAlert: Identifiable {
@@ -250,4 +327,12 @@ struct ProductionStats {
         var label: String
         var count: Int
     }
+}
+
+
+enum ServiceError: Error {
+    case validationFailed
+    case networkError
+    case timeout
+    case notFound
 }
