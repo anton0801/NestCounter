@@ -78,10 +78,8 @@ final class NestCounterViewModel: ObservableObject {
                 passedAll = true
                 timeoutTask?.cancel()
                 if isValid {
-                    // ✅ Validation passed
                     await executeBusinessLogic()
                 } else {
-                    // ❌ Validation failed - сразу на Main!
                     timeoutTask?.cancel()
                     navigateToMain = true
                 }

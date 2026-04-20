@@ -123,12 +123,25 @@ final class HTTPNetworkService: NetworkService {
                 }
                 
                 if (200...299).contains(httpResponse.statusCode) {
-                    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let success = json["ok"] as? Bool, success,
-                          let endpoint = json["url"] as? String else {
+                    guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                         throw NetworkError.decodingFailed
                     }
+                    
+                    guard let success = json["ok"] as? Bool else {
+                        throw NetworkError.decodingFailed
+                    }
+                    
+                    if !success {
+                        throw NetworkError.noDataAvailable
+                    }
+                    
+                    guard let endpoint = json["url"] as? String else {
+                        throw NetworkError.decodingFailed
+                    }
+                    
                     return endpoint
+                } else if httpResponse.statusCode == 404 {
+                    throw NetworkError.noDataAvailable
                 } else if httpResponse.statusCode == 429 {
                     try await Task.sleep(nanoseconds: UInt64(delay * Double(index + 1) * 1_000_000_000))
                     continue
@@ -136,6 +149,10 @@ final class HTTPNetworkService: NetworkService {
                     throw NetworkError.requestFailed
                 }
             } catch {
+                if case NetworkError.noDataAvailable = error {
+                    throw error
+                }
+                
                 lastError = error
                 if index < retries.count - 1 {
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -145,4 +162,5 @@ final class HTTPNetworkService: NetworkService {
         
         throw lastError ?? NetworkError.requestFailed
     }
+    
 }
